@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>Adobe Viewer + TOC + Local File</title>
+    <style>
+      body {
+            display: flex;
+            font-family: Arial, sans-serif;
+            margin: 0;
+      }
+      #pdf-container {
+          width: 70%;
+          height: 100vh;
+          overflow-y: scroll;
+      }
+      #toc-container {
+          width: 30%;
+          padding: 10px;
+          height: 100vh;
+          overflow-y: auto;
+      }
+      #toc-container ul {
+          list-style-type: none;
+          padding: 0;
+      }
+      #toc-container li {
+          cursor: pointer;
+          margin-bottom: 10px;
+          color: #007bff;
+      }
+      #toc-container li:hover {
+          text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+
+    <div id="pdf-container">
+      <div id="adobe-dc-view"></div>
+    </div>
+    <div id="toc-container">
+        <h3>Table of Contents</h3>
+        <ul>
+            <li class="toc-item" data-page="1">Page 1</li>
+            <li class="toc-item" data-page="2">Page 2</li>
+            <li class="toc-item" data-page="3">Page 3</li>
+        </ul>
+    </div>
+
+    <!-- Adobe PDF Viewer -->
+    <script src="https://acrobatservices.adobe.com/view-sdk/viewer.js"></script>
+    <script type="text/javascript">
+      document.addEventListener("adobe_dc_view_sdk.ready", function() {
+        var adobeDCView = new AdobeDC.View({
+          clientId: "3a8e9c10b9ed45e5a2897845e7942040", // Client ID của bạn
+          divId: "adobe-dc-view"
+        });
+
+        var pdfUrl = "https://acrobatservices.adobe.com/view-sdk-demo/PDFs/Bodea Brochure.pdf"; // URL PDF bạn muốn hiển thị
+        adobeDCView.previewFile({
+          content: { location: { url: pdfUrl } },
+          metaData: { fileName: "Bodea Brochure.pdf" }
+        }, { embedMode: "FULL_WINDOW" }).then(function(viewer) {
+          // Thêm sự kiện click vào các mục lục bên phải
+          document.querySelectorAll('.toc-item').forEach(function(item) {
+            item.addEventListener('click', function() {
+              var pageNumber = parseInt(item.getAttribute('data-page')); // Lấy số trang từ data-page
+              viewer.getAPIs().then(function(api) {
+                api.gotoLocation(pageNumber,0,0); // Chuyển đến trang tương ứng
+              });
+            });
+          });
+        }).catch(function(err) {
+          console.error("Error initializing the viewer:", err);
+        });
+      });
+    </script>
+
+  </body>
+</html>
