@@ -1,81 +1,153 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <title>Adobe Viewer + TOC + Local File</title>
-    <style>
-      body {
-            display: flex;
-            font-family: Arial, sans-serif;
-            margin: 0;
-      }
-      #pdf-container {
-          width: 70%;
-          height: 100vh;
-          overflow-y: scroll;
-      }
-      #toc-container {
-          width: 30%;
-          padding: 10px;
-          height: 100vh;
-          overflow-y: auto;
-      }
-      #toc-container ul {
-          list-style-type: none;
-          padding: 0;
-      }
-      #toc-container li {
-          cursor: pointer;
-          margin-bottom: 10px;
-          color: #007bff;
-      }
-      #toc-container li:hover {
-          text-decoration: underline;
-      }
-    </style>
-  </head>
-  <body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Viewer with Adobe SDK</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    
+    #toc {
+      width: 250px;
+      padding: 20px;
+      background-color: #f5f5f5;
+      border-right: 1px solid #ddd;
+      overflow-y: auto;
+    }
+    
+    #toc h2 {
+      margin-top: 0;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #ddd;
+    }
+    
+    #toc-list {
+      list-style: none;
+      padding: 0;
+    }
+    
+    #toc-list li {
+      margin: 10px 0;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background-color 0.2s;
+    }
+    
+    #toc-list li:hover {
+      background-color: #e0e0e0;
+    }
+    
+    #toc-list li.active {
+      background-color: #4285f4;
+      color: white;
+    }
+    
+    #pdf-container {
+      flex: 1;
+      overflow: hidden;
+      background-color: #e9e9e9;
+      position: relative;
+    }
+    
+    #adobe-dc-view {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      font-size: 18px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div id="toc">
+    <h2>Table of Contents</h2>
+    <ul id="toc-list">
+      <!-- TOC items will be loaded dynamically -->
+    </ul>
+  </div>
+  
+  <div id="pdf-container">
+    <div id="adobe-dc-view"></div>
+  </div>
 
-    <div id="pdf-container">
-      <div id="adobe-dc-view"></div>
-    </div>
-    <div id="toc-container">
-        <h3>Table of Contents</h3>
-        <ul>
-            <li class="toc-item" data-page="1">Page 1</li>
-            <li class="toc-item" data-page="2">Page 2</li>
-            <li class="toc-item" data-page="3">Page 3</li>
-        </ul>
-    </div>
-
-    <!-- Adobe PDF Viewer -->
-    <script src="https://acrobatservices.adobe.com/view-sdk/viewer.js"></script>
-    <script type="text/javascript">
-      document.addEventListener("adobe_dc_view_sdk.ready", function() {
-        var adobeDCView = new AdobeDC.View({
-          clientId: "8b5dbac1292f41eb92e921724a05ad61", // Client ID của bạn
-          divId: "adobe-dc-view"
-        });
-
-        var pdfUrl = "https://acrobatservices.adobe.com/view-sdk-demo/PDFs/Bodea Brochure.pdf"; // URL PDF bạn muốn hiển thị
-        adobeDCView.previewFile({
-          content: { location: { url: pdfUrl } },
-          metaData: { fileName: "Bodea Brochure.pdf" }
-        }, { embedMode: "FULL_WINDOW" }).then(function(viewer) {
-          // Thêm sự kiện click vào các mục lục bên phải
-          document.querySelectorAll('.toc-item').forEach(function(item) {
-            item.addEventListener('click', function() {
-              var pageNumber = parseInt(item.getAttribute('data-page')); // Lấy số trang từ data-page
-              viewer.getAPIs().then(function(api) {
-                api.gotoLocation(pageNumber,0,0); // Chuyển đến trang tương ứng
-              });
+  <script src="https://documentservices.adobe.com/view-sdk/viewer.js"></script>
+  <script>
+    document.addEventListener("adobe_dc_view_sdk.ready", function() {
+      // Client ID for Adobe View SDK
+      const clientId = "8b5dbac1292f41eb92e921724a05ad61";
+      
+      // PDF URL
+      const pdfUrl = "https://acrobatservices.adobe.com/view-sdk-demo/PDFs/Bodea%20Brochure.pdf";
+      
+      // Initialize the View SDK
+      var adobeDCView = new AdobeDC.View({
+        clientId: clientId,
+        divId: "adobe-dc-view"
+      });
+      
+      // Create a PDF preview
+      adobeDCView.previewFile({
+        content: { location: { url: pdfUrl } },
+        metaData: { fileName: "Bodea Brochure.pdf" }
+      }, {
+        embedMode: "FULL_WINDOW",
+        showDownloadPDF: false,
+        showPrintPDF: false,
+        showLeftHandPanel: false,
+        showAnnotationTools: false,
+        defaultViewMode: "FIT_PAGE"
+      }).then(function(viewer) {
+          // Get the PDF viewer API
+          viewer.getAPIs().then(function(apis) {
+            // Get document metadata with page count
+            apis.getPDFMetadata().then(function(result) {
+              const pageCount = result.numPages
+              createTableOfContents(pageCount, apis);
             });
           });
         }).catch(function(err) {
           console.error("Error initializing the viewer:", err);
         });
-      });
-    </script>
-
-  </body>
+    });
+    
+    // Create table of contents based on page numbers
+    function createTableOfContents(numPages, apis) {
+      const tocList = document.getElementById('toc-list');
+      tocList.innerHTML = '';
+      
+      for (let i = 1; i <= numPages; i++) {
+        const li = document.createElement('li');
+        li.textContent = `Page ${i}`;
+        li.setAttribute('data-page', i);
+        li.addEventListener('click', function() {
+          // Navigate to the selected page
+          apis.gotoLocation(i);
+          
+          // Update active status in TOC
+          document.querySelectorAll('#toc-list li').forEach(item => {
+            item.classList.remove('active');
+          });
+          this.classList.add('active');
+        });
+        tocList.appendChild(li);
+      }
+    }
+  </script>
+</body>
 </html>
