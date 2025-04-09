@@ -1,133 +1,195 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Viewer with Scrollable Pages</title>
-    <style>
-        body {
-            display: flex;
-            font-family: Arial, sans-serif;
-            margin: 0;
-        }
-        #pdf-container {
-            width: 70%;
-            height: 100vh;
-            overflow-y: scroll;
-            padding: 10px;
-        }
-        #toc-container {
-            width: 30%;
-            padding: 10px;
-            height: 100vh;
-            overflow-y: auto;
-        }
-        #toc-container ul {
-            list-style-type: none;
-            padding: 0;
-        }
-        #toc-container li {
-            cursor: pointer;
-            margin-bottom: 10px;
-            color: #007bff;
-        }
-        #toc-container li:hover {
-            text-decoration: underline;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Viewer with Table of Contents</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      display: flex;
+      height: 100vh;
+    }
+    
+    #toc {
+      width: 250px;
+      padding: 20px;
+      background-color: #f5f5f5;
+      border-right: 1px solid #ddd;
+      overflow-y: auto;
+    }
+    
+    #toc h2 {
+      margin-top: 0;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #ddd;
+    }
+    
+    #toc-list {
+      list-style: none;
+      padding: 0;
+    }
+    
+    #toc-list li {
+      margin: 10px 0;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background-color 0.2s;
+    }
+    
+    #toc-list li:hover {
+      background-color: #e0e0e0;
+    }
+    
+    #pdf-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      background-color: #e9e9e9;
+    }
+    
+    #pdf-viewer {
+      background-color: #fff;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      margin: 0 auto;
+    }
+    
+    .pdf-page {
+      margin-bottom: 20px;
+      position: relative;
+    }
+    
+    .page-num {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background-color: rgba(0, 0, 0, 0.5);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      font-size: 18px;
+      color: #666;
+    }
+  </style>
 </head>
 <body>
-
-    <div id="pdf-container"></div>
-    <div id="toc-container">
-        <h3>Table of Contents</h3>
-        <ul>
-            <li data-page="1">Page 1</li>
-            <li data-page="2">Page 2</li>
-            <li data-page="3">Page 3</li>
-        </ul>
+  <div id="toc">
+    <h2>Table of Contents</h2>
+    <ul id="toc-list">
+      <!-- TOC items will be loaded dynamically -->
+    </ul>
+  </div>
+  
+  <div id="pdf-container">
+    <div id="pdf-viewer">
+      <div class="loading">Loading PDF...</div>
     </div>
+  </div>
 
-    <!-- Load PDF.js library from CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
-
-    <script>
-        const url = 'https://acrobatservices.adobe.com/view-sdk-demo/PDFs/Bodea%20Brochure.pdf';
-        const pdfContainer = document.getElementById('pdf-container');
-        const tocContainer = document.getElementById('toc-container');
-
-        let pdfDoc = null;
-        let currentPage = 1; // Start at page 1
-        const pagesToRender = 5; // Render 5 pages at a time
-        const pageHeights = []; // To store height of each page for scrolling
-
-        // Load the PDF
-        pdfjsLib.getDocument(url).promise.then(function(pdf) {
-            pdfDoc = pdf;
-            renderPages(currentPage, pagesToRender);  // Initial render to show the first set of pages
+  <script>
+    // PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    
+    // PDF URL
+    const pdfUrl = 'https://acrobatservices.adobe.com/view-sdk-demo/PDFs/Bodea%20Brochure.pdf';
+    
+    const pdfContainer = document.getElementById('pdf-viewer');
+    const tocList = document.getElementById('toc-list');
+    
+    let pdfDoc = null;
+    let pageRendering = false;
+    let pageNumPending = null;
+    const scale = 1.5;
+    
+    // Load the PDF
+    async function loadPDF() {
+      try {
+        // Load the PDF document
+        const loadingTask = pdfjsLib.getDocument(pdfUrl);
+        pdfDoc = await loadingTask.promise;
+        
+        // Clear loading message
+        pdfContainer.innerHTML = '';
+        
+        // Create TOC
+        createTableOfContents(pdfDoc.numPages);
+        
+        // Render all pages
+        renderAllPages();
+      } catch (error) {
+        console.error('Error loading PDF:', error);
+        pdfContainer.innerHTML = '<div class="loading">Error loading PDF. Please try again.</div>';
+      }
+    }
+    
+    // Create table of contents based on page numbers
+    function createTableOfContents(numPages) {
+      tocList.innerHTML = '';
+      
+      for (let i = 1; i <= numPages; i++) {
+        const li = document.createElement('li');
+        li.textContent = `Page ${i}`;
+        li.setAttribute('data-page', i);
+        li.addEventListener('click', () => {
+          const targetPage = document.querySelector(`.pdf-page[data-page="${i}"]`);
+          if (targetPage) {
+            targetPage.scrollIntoView({ behavior: 'smooth' });
+          }
         });
-
-        // Render multiple pages in a scrollable container
-        function renderPages(startPage, numPages) {
-            pdfContainer.innerHTML = ''; // Clear the container
-            pageHeights.length = 0; // Reset page heights
-
-            const endPage = Math.min(startPage + numPages - 1, pdfDoc.numPages);
-            for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
-                renderPage(pageNum);
-            }
-        }
-
-        // Render a PDF page into the container
-        function renderPage(pageNum) {
-            pdfDoc.getPage(pageNum).then(function(page) {
-                const scale = 1.5;
-                const viewport = page.getViewport({ scale: scale });
-
-                const canvas = document.createElement('canvas');
-                pdfContainer.appendChild(canvas);
-
-                const ctx = canvas.getContext('2d');
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
-
-                page.render({
-                    canvasContext: ctx,
-                    viewport: viewport
-                });
-
-                // Store the height of the page for later scrolling
-                pageHeights.push(viewport.height);
-            });
-        }
-
-        // Handle click on Table of Contents items
-        tocContainer.addEventListener('click', function(e) {
-            if (e.target && e.target.nodeName === "LI") {
-                const pageNum = parseInt(e.target.getAttribute('data-page'));
-                renderPages(pageNum, pagesToRender); // Render multiple pages starting from the clicked page
-
-                // Scroll to the page corresponding to the clicked item
-                scrollToPage(pageNum);
-            }
-        });
-
-        // Function to scroll to the page number
-        function scrollToPage(pageNum) {
-            let totalHeightBeforePage = 0;
-            for (let i = 0; i < pageNum - 1; i++) {
-                totalHeightBeforePage += pageHeights[i];
-            }
-            pdfContainer.scrollTop = totalHeightBeforePage; // Scroll to the top of the selected page
-        }
-
-        // Optionally, implement infinite scroll or load more pages when the user reaches the bottom
-        pdfContainer.addEventListener('scroll', function() {
-            if (pdfContainer.scrollTop + pdfContainer.clientHeight >= pdfContainer.scrollHeight) {
-                currentPage += pagesToRender; // Load the next set of pages
-                renderPages(currentPage, pagesToRender);
-            }
-        });
-    </script>
+        tocList.appendChild(li);
+      }
+    }
+    
+    // Render all pages of the PDF
+    async function renderAllPages() {
+      const numPages = pdfDoc.numPages;
+      
+      for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+        // Create a div for each page
+        const pageDiv = document.createElement('div');
+        pageDiv.className = 'pdf-page';
+        pageDiv.setAttribute('data-page', pageNum);
+        pdfContainer.appendChild(pageDiv);
+        
+        // Add page number indicator
+        const pageNumDiv = document.createElement('div');
+        pageNumDiv.className = 'page-num';
+        pageNumDiv.textContent = `Page ${pageNum}`;
+        pageDiv.appendChild(pageNumDiv);
+        
+        // Render the page
+        const page = await pdfDoc.getPage(pageNum);
+        const viewport = page.getViewport({ scale });
+        
+        // Create canvas for rendering
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        pageDiv.appendChild(canvas);
+        
+        // Render PDF page into canvas context
+        await page.render({
+          canvasContext: context,
+          viewport: viewport
+        }).promise;
+      }
+    }
+    
+    // Initialize the PDF viewer
+    loadPDF();
+  </script>
 </body>
 </html>
